@@ -9,8 +9,8 @@ import random
 from datetime import date
 import pickle
 import csv
-from .segment import SegmentNeurons
-from .analyze import AnalyzeNeurons
+from classes.cp_seg import SegmentNeurons
+from classes.analyze import AnalyzeNeurons
 import tifffile as tff
 
 from PyQt6.QtWidgets import (QApplication, QLabel, QDialog,
@@ -85,6 +85,15 @@ class Calcium(QDialog):
 
         self.setLayout(self.layout)
 
+        self.seg: SegmentNeurons = None
+        self.analysis: AnalyzeNeurons = None
+
+    def _update_fname(self, file: str) -> None:
+        '''Update the filename displayed on the selection window.'''
+        _, fname = os.path.split(file)
+        self.folder_c.setText(fname)
+        self.layout.addWidget(self.folder_c, 1, 0)
+
     def _select_folder(self) -> None:
         """Select folder that contains dff.csv file."""
         dlg = QFileDialog(self)
@@ -108,30 +117,34 @@ class Calcium(QDialog):
         # iterate through the folder, find ome.tif
         for (folder, _, filenames) in os.walk(self.folder_path):
             for file_name in filenames:
-                if file_name.endswith(".ome.tif"):
+                if file_name.endswith(".ome.tif") and not file_name.startswith("._"):
                     recording_name = file_name[:-8]
-
+                    print(f"recording name: {recording_name}")
+                    today = date.today().strftime("%y%m%d")
+                    save_path = os.path.join(folder, recording_name)
+                    save_path = save_path + "_" + today + "_" + self.fname.text()
+                    
                     # if segmentation, run segmentation
                     if self.seg and self.seg._check_model():
-                        file_path = os.path.join(folder, file_name)
-                        img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                        print(f"the shape of img is {img.shape}")
-                        self.roi_dict, self.dff = self.seg._run(img, file_path)
+                        file_path = os.path.join(folder, file_name)             
+                        img = tff.imread(file_path, is_mmstack=False)
 
+                        self.roi_dict, self.dff = self.seg._run(img, save_path)
+
+                        # if also checked for analysis
                         if self.analysis:
                             if len(self.dff) > 0 and len(self.roi_dict) > 0:
-                                pass
+                                mda_file = recording_name + "_metadata.txt"
+                                mda_file = os.path.join(folder, mda_file)
+                                self.analysis._analyze(self.roi_dict, None, self.dff, mda_file, save_path)
                             else:
                                 print(f"No cells in {recording_name} to analyze. Check segmentation!")
-                            
-
-
 
                     # if only analysis, run analysis
                     if not self.seg and self.analysis:
                         path = os.path.join(folder, recording_name)
-                        self.analysis._analyze(path)
-
+                        self.analysis._reanalyze(path, save_path)
+        print("------------FINISHED-------------")
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
     sd = Calcium()
