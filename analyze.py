@@ -20,7 +20,7 @@ from . import SegmentNeuron
 COLOR_LIST = list(mcolors.XKCD_COLORS)
 
 class AnalyzeNeurons():
-    """Test different ways to find spikes in Calcium Recordings."""
+    """Analyze segmented calcium recordings."""
     def __init__(self):
         pass
 
@@ -41,47 +41,44 @@ class AnalyzeNeurons():
             dff_file = pd.read_csv(file)
         return dff_file
 
-    def _analyze(self):
+    def _analyze(self, path: str):
         """Analyze the data."""
         # traverse through the folder selected, go to one folder
-        for (folder, _, filenames) in os.walk(self.folder_path):
-            for file_name in filenames:
-                if file_name.endswith(".ome.tif"):
-                    recording_name = file_name[:-8]
+        dff_file = os.path.join(path, "dff.csv")
+        mda_file = path + "_metadata.txt"
 
-                    dff_file = os.path.join(folder, recording_name, "dff.csv")
-                    mda_file = os.path.join(folder, recording_name+"_metadata.txt")
+        if os.path.exists(dff_file) and os.path.exists(mda_file):
+            # get spikes
+            roi_dff, spk = self._analyze_dff(dff_file)
 
-                    if os.path.exists(dff_file) and os.path.exists(mda_file):
-                        # get spikes
-                        roi_dff, spk = self._analyze_dff(dff_file)
+            # get metadata
+            framerate, binning, pixel_size, objective = self._extract_metadata(mda_file)
 
-                        # get metadata
-                        framerate, binning, pixel_size, objective = self._extract_metadata(mda_file)
+            # get cell size
+            path_1 = os.path.join(path, "roi_size.csv")
+            path_2 = os.path.join(path, "roi_data.csv")
 
-                        # get cell size
-                        path_1 = os.path.join(folder, recording_name, "roi_size.csv")
-                        path_2 = os.path.join(folder, recording_name, "roi_data.csv")
+            if os.path.exists(path_1):
+                cell_size = self._get_cell_size(path_1, "cell size")
+            elif os.path.exists(path_2):
+                cell_size = self._get_cell_size(path_2, "cell_size (um)")
+            # analyze the dff signals
+            roi_analysis = self._analyze_roi(roi_dff, spk, framerate)
+            mean_connect = self._get_mean_connect(roi_dff, spk)
 
-                        if os.path.exists(path_1):
-                            cell_size = self._get_cell_size(path_1, "cell size")
-                        elif os.path.exists(path_2):
-                            cell_size = self._get_cell_size(path_2, "cell_size (um)")
-                        # analyze the dff signals
-                        roi_analysis = self._analyze_roi(roi_dff, spk, framerate)
-                        mean_connect = self._get_mean_connect(roi_dff, spk)
+            # save the results
+            today = date.today().strftime("%y%m%d")
+            save_path = path + "_" + today
+            if not os.path.isdir(save_path):
+                os.mkdir(save_path)
+            self._save_results(save_path, spk, cell_size, roi_analysis, framerate, roi_dff)
+            self._generate_summary(save_path, roi_analysis, spk, '/summary.txt', cell_size,
+                                    framerate, roi_dff, mean_connect)
 
-                        # save the results
-                        today = date.today().strftime("%y%m%d")
-                        save_path = os.path.join(folder, recording_name+"_"+today)
-                        if not os.path.isdir(save_path):
-                            os.mkdir(save_path)
-                        self._save_results(save_path, spk, cell_size, roi_analysis, framerate, roi_dff)
-                        self._generate_summary(save_path, roi_analysis, spk, '/summary.txt', cell_size,
-                                               framerate, roi_dff, mean_connect)
-
-                        # plot calcium traces
-                        self._plot_traces(roi_dff, spk, save_path)
+            # plot calcium traces
+            self._plot_traces(roi_dff, spk, save_path)
+        else:
+            print("one of the required files (dff.csv or metadata.txt) not found. Please run segmentation with the analysis.")
 
     def _analyze_dff(self, csv_file: str) -> tuple[pd.DataFrame, dict, float]:
         """Analyze the dff file and get spikes."""
@@ -597,7 +594,13 @@ class AnalyzeNeurons():
         active = (active / len(spk_times)) * 100
         return active
 
-
+    def _select_folder(self) -> None:
+        """Select folder that contains dff.csv file."""
+        dlg = QFileDialog(self)
+        # dlg.setFileMode(QFileDialog.Directory)
+        if dlg.exec():
+            self.folder_path = dlg.selectedFiles()[0]
+            self._update_fname(self.folder_path)
 
 
     # from test dff
@@ -626,13 +629,7 @@ class AnalyzeNeurons():
         fname = filename + f"_{ptg}%Frame_median_{self.fname.text()}"
         self.visualize_dff(roi_dff, master_spikes, prominence, path, fname, "median")
 
-    def _select_folder(self) -> None:
-        """Select folder that contains dff.csv file."""
-        dlg = QFileDialog(self)
-        # dlg.setFileMode(QFileDialog.Directory)
-        if dlg.exec():
-            self.folder_path = dlg.selectedFiles()[0]
-            self._update_fname(self.folder_path)
+
 
     def _update_fname(self, file: str) -> None:
         '''Update the filename displayed on the selection window.'''

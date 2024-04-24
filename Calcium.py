@@ -9,11 +9,13 @@ import random
 from datetime import date
 import pickle
 import csv
-from . import SegmentNeurons
+from .segment import SegmentNeurons
+from .analyze import AnalyzeNeurons
+import tifffile as tff
 
 from PyQt6.QtWidgets import (QApplication, QLabel, QDialog,
                              QGridLayout, QPushButton, QFileDialog,
-                             QLineEdit)
+                             QLineEdit, QCheckBox)
 
 class Calcium(QDialog):
     """Test different ways to find spikes in Calcium Recordings."""
@@ -27,7 +29,8 @@ class Calcium(QDialog):
         self._select_btn.clicked.connect(self._select_folder)
         self.folder_c = QLabel("")
 
-        self._check_seg = QCheckBox()
+        self._check_seg = QCheckBox(text="Segment")
+        self._check_ana = QCheckBox(text="Analyze")
 
         # self.combobox = QComboBox()
         # self.combobox.addItem("mean")
@@ -57,8 +60,8 @@ class Calcium(QDialog):
         filename = QLabel("Enter filename/date: ")
         self.fname = QLineEdit()
 
-        self.ok_btn = QPushButton("Analyze")
-        self.ok_btn.clicked.connect(self._analyze)
+        self.ok_btn = QPushButton("Run")
+        self.ok_btn.clicked.connect(self._run)
 
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.close)
@@ -67,6 +70,9 @@ class Calcium(QDialog):
         self.layout.addWidget(QLabel("Select the folder: "), 0, 0)
         self.layout.addWidget(self._select_btn, 0, 1)
         self.layout.addWidget(self.folder_c, 1, 0)
+
+        self.layout.addWidget(self._check_seg, 2, 0)
+        self.layout.addWidget(self._check_ana, 2, 1)
         # self.layout.addWidget(thres, 2, 0)
         # self.layout.addWidget(self.combobox, 2, 1)
         # self.layout.addWidget(frame, 3, 0)
@@ -79,8 +85,52 @@ class Calcium(QDialog):
 
         self.setLayout(self.layout)
 
-        self._segment = SegmentNeurons()
+    def _select_folder(self) -> None:
+        """Select folder that contains dff.csv file."""
+        dlg = QFileDialog(self)
+        # dlg.setFileMode(QFileDialog.Directory)
+        if dlg.exec():
+            self.folder_path = dlg.selectedFiles()[0]
+            self._update_fname(self.folder_path)
 
+    def _load_module(self):
+        """Load Segmentation or Analyze."""
+        if self._check_seg.isChecked():
+            self.seg = SegmentNeurons()
+            self.seg._load_model()
+
+        if self._check_ana.isChecked():
+            self.analysis = AnalyzeNeurons()
+
+    def _run(self):
+        """Run."""
+        self._load_module()
+        # iterate through the folder, find ome.tif
+        for (folder, _, filenames) in os.walk(self.folder_path):
+            for file_name in filenames:
+                if file_name.endswith(".ome.tif"):
+                    recording_name = file_name[:-8]
+
+                    # if segmentation, run segmentation
+                    if self.seg and self.seg._check_model():
+                        file_path = os.path.join(folder, file_name)
+                        img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                        print(f"the shape of img is {img.shape}")
+                        self.roi_dict, self.dff = self.seg._run(img, file_path)
+
+                        if self.analysis:
+                            if len(self.dff) > 0 and len(self.roi_dict) > 0:
+                                pass
+                            else:
+                                print(f"No cells in {recording_name} to analyze. Check segmentation!")
+                            
+
+
+
+                    # if only analysis, run analysis
+                    if not self.seg and self.analysis:
+                        path = os.path.join(folder, recording_name)
+                        self.analysis._analyze(path)
 
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)

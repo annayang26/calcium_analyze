@@ -3,19 +3,20 @@ from pathlib import Path
 import numpy as np
 
 class SegmentNeurons():
+    """Segment neurons in the image."""
     def __init__(self) -> None:
-        self._cp_model: models.CellposeModel = None
+        self._model: models.CellposeModel = None
 
     def _load_model(self) -> None:
         """Load the model"""
         dir_path = Path(__file__).parent
         model_path = Path.joinpath(dir_path, "CP_calcium")
-        self._cp_model = models.CellposeModel(gpu=False,
+        self._model = models.CellposeModel(gpu=False,
                                                 pretrained_model=model_path)
         
     def _segment(self, img: np.ndarray, path: str, channels: list = [0,0]) -> np.ndarray:
         """Segmetnt the img."""
-        masks, flows, _ = self._cp_model.eval(img,
+        masks, flows, _ = self._model.eval(img,
                                         diameter=None,
                                         flow_threshold=0.1,
                                         cellprob_threshold=0,
@@ -26,6 +27,10 @@ class SegmentNeurons():
         io.save_masks(img, rgb_mask, flows, path, tif=True)
 
         return masks
+
+    def _check_model(self):
+        """Check if the model is loaded."""
+        return self._model is not None
 
     def _save_overlay(self, img: np.ndarray, channels: list, 
                       masks: np.ndarray, save_path: str) -> None:
@@ -126,5 +131,13 @@ class SegmentNeurons():
             median.append(np.median(raw_f[x:y]))
         return background, median
 
+    def _run(self, img: np.ndarray, file_path: str) -> tuple[dict, dict]:
+        """Run the entire segmentation process."""
+        masks = self._segment(img[0], file_path)
+        roi_dict, masks = self._getROIpos(masks, 0)
+        roi_f = self._ROI_intensity(roi_dict, img)
+        dff, median, bg = self._calculate_DFF(roi_f)
+
+        return roi_dict, dff
 
 
