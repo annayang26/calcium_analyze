@@ -36,10 +36,10 @@ class AnalyzeNeurons():
                  dff: dict | pd.DataFrame, mda_path: str, save_path: str):
         """Analyze Cells."""
         roi_dff, n_dff, spk = self._analyze_dff(dff) 
-        framerate, binning, pixel_size, objective, total_frames = self._extract_metadata(mda_path)
+        framerate, binning, pixel_size, objective, total_frames, magnification = self._extract_metadata(mda_path)
 
         if not cell_size:
-            cell_size, cs_arr = self._cell_size(roi_dict, binning, pixel_size, objective)
+            cell_size, cs_arr = self._cell_size(roi_dict, binning, pixel_size, objective, magnification)
         
         roi_analysis = self._analyze_roi(roi_dff, spk, framerate)
         mean_connect = self._get_mean_connect(roi_dff, spk)
@@ -94,11 +94,11 @@ class AnalyzeNeurons():
         return roi_dff, n_dff, spk_times
 
     def _cell_size(self, roi_dict: dict, binning: int, pixel_size: int, 
-                   objective: int) -> tuple[dict, np.ndarray]:
+                   objective: int, magnification: float) -> tuple[dict, np.ndarray]:
         """Calculate cell size."""
         cs_dict = {}
         for r in roi_dict:
-            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective # pixel to um
+            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / (objective * magnification)# pixel to um
 
         cs_arr = np.array(list(cs_dict.items()))
 
@@ -122,6 +122,7 @@ class AnalyzeNeurons():
         obj = False
         ps = False
         t_f = False
+        mag = True
 
         with open(mda_file) as f:
             metadata = f.readlines()
@@ -144,10 +145,14 @@ class AnalyzeNeurons():
                 obj = True
             if line.startswith('"Frames": '):
                 total_frames = int(line[len('"Frames": '):-1])
-            if fr and bn and ps and obj and t_f:
+            if line.startswith('"IntermediateMagnification-Magnification": '):
+                word = line[len('"IntermediateMagnification-Magnification": '):-1].strip('\"')
+                magnification = float(word[:-1])
+                mag = True
+            if fr and bn and ps and obj and t_f and mag:
                 break
 
-        return framerate, binning, pixel_size, objective, total_frames
+        return framerate, binning, pixel_size, objective, total_frames, magnification
 
     def _analyze_roi(self, roi_dff: dict, spk_times: dict, framerate: float):
         """Analyze the dff from each ROI."""
