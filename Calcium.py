@@ -97,10 +97,9 @@ class Calcium(QDialog):
     def _select_folder(self) -> None:
         """Select folder that contains dff.csv file."""
         dlg = QFileDialog(self)
-        # dlg.setFileMode(QFileDialog.Directory)
-        if dlg.exec():
-            self.folder_path = dlg.selectedFiles()[0]
-            self._update_fname(self.folder_path)
+        # dlg.setFileMode(ExistingFiles)
+        self.folder_path = dlg.getExistingDirectory(None, "Select Folder")
+        self._update_fname(self.folder_path)
 
     def _load_module(self):
         """Load Segmentation or Analyze."""
