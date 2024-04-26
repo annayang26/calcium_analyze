@@ -8,14 +8,20 @@ import random
 import pickle
 import csv
 
-COLOR_LIST = list(mcolors.XKCD_COLORS)
+light_colors = ["whitesmoke", "white", "snow", "mistyrose", "seashell", "linen",
+                "antiquewhite", "oldlace", "floralwhite", "cornsilk", "lemonchiffon",
+                "ivory", "beige", "lightyellow", "lightgoldenrodyellow",
+                "yellow", "honeydew", "mintcream", "azure", "lightcyan", "aliceblue",
+                "ghostwhite", "lavender", "lavenderblush"]
+all_colors = list(mcolors.CSS4_COLORS)
+COLOR_LIST = [color for color in all_colors if color not in light_colors]
 
 class AnalyzeNeurons():
     """Analyze segmented calcium recordings."""
     def __init__(self):
         pass
 
-    def find_file(self, folder_path: str, target: str) -> list[str]:
+    def _find_file(self, folder_path: str, target: str) -> list[str]:
         """Find all dff csv files in the given folder."""
         file_list = []
         for (folder_path, _, fnames) in os.walk(folder_path):
@@ -26,13 +32,13 @@ class AnalyzeNeurons():
 
         return file_list
 
-    def read_csv(self, path: str) -> pd.DataFrame:
+    def _read_csv(self, path: str) -> pd.DataFrame:
         """Read the csv file."""
         with open(path, "r") as file:
             dff_file = pd.read_csv(file)
         return dff_file
 
-    def _analyze(self, roi_dict: dict | None, cell_size: dict, 
+    def analyze(self, roi_dict: dict | None, cell_size: dict, 
                  dff: dict | pd.DataFrame, mda_path: str, save_path: str):
         """Analyze Cells."""
         roi_dff, n_dff, spk = self._analyze_dff(dff) 
@@ -51,27 +57,34 @@ class AnalyzeNeurons():
         # plot calcium traces
         self._plot_traces(n_dff, spk, save_path)
 
-    def _reanalyze(self, folder_path: str, save_path: str):
+    def reanalyze(self, folder_path: str, recording_name: str, save_path: str):
         """Renalyze the data."""
-        # traverse through the folder selected, go to one folder
-        dff_file = os.path.join(folder_path, "dff.csv")
-        mda_file = folder_path + "_metadata.txt"
+        analyzed = False        
+        for folders, dirs, fnames in os.walk(folder_path):
+            for dir in dirs:
+                if recording_name in dir:
+                    # traverse through the folder selected, go to one folder
+                    dir_path = os.path.join(folders, dir)
+                    dff_file = os.path.join(dir_path, "dff.csv")
+                    mda_path = os.path.join(folder_path, recording_name)
+                    mda_file = mda_path + "_metadata.txt"
 
-        if os.path.exists(dff_file) and os.path.exists(mda_file):
-            # get cell size
-            path_1 = os.path.join(folder_path, "roi_size.csv")
-            path_2 = os.path.join(folder_path, "roi_data.csv")
+                    if os.path.exists(dff_file) and os.path.exists(mda_file):
+                        # get cell size
+                        path_1 = os.path.join(dir_path, "roi_size.csv")
+                        path_2 = os.path.join(dir_path, "roi_data.csv")
 
-            if os.path.exists(path_1):
-                cell_size = self._get_cell_size(path_1, "cell size")
-            elif os.path.exists(path_2):
-                cell_size = self._get_cell_size(path_2, "cell_size (um)")    
-        
-            dff_df = self.read_csv(dff_file)
-            self._analyze(None, cell_size, dff_df, mda_file, save_path)
+                        if os.path.exists(path_1):
+                            cell_size = self._get_cell_size(path_1, "cell size")
+                        elif os.path.exists(path_2):
+                            cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
-        else:
-            print("one of the required files (dff.csv or metadata.txt) not found. Please run segmentation with the analysis.")
+                        dff_df = self._read_csv(dff_file)
+                        self.analyze(None, cell_size, dff_df, mda_file, save_path)
+                        analyzed = True
+
+        if not analyzed:
+            print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
 
     def _analyze_dff(self, dff_df: pd.DataFrame | dict) -> tuple[dict, dict, dict]:
         """Analyze the dff file and get spikes."""
@@ -448,7 +461,7 @@ class AnalyzeNeurons():
         num_f = np.min([num, len(roi_dff)])
         final_dff = random.sample(list(roi_dff.keys()), num_f)
         final_dff.sort()
-        rand_color_ind = random.sample(COLOR_LIST, k=num_f)
+        rand_color_ind = random.sample(COLOR_LIST, k=num_f,)
 
         return final_dff, rand_color_ind
     
@@ -463,7 +476,7 @@ class AnalyzeNeurons():
             pickle.dump(spk, spike_file)
 
         # save 
-        roi_data = self.all_roi_data(roi_analysis, cell_size, spk, framerate, total_frames)
+        roi_data = self._all_roi_data(roi_analysis, cell_size, spk, framerate, total_frames)
         with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
             writer = csv.writer(roi_data_file, dialect='excel')
             fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
@@ -472,7 +485,7 @@ class AnalyzeNeurons():
             writer.writerow(fields)
             writer.writerows(roi_data)
             
-    def all_roi_data(self, roi_analysis: dict, cell_size: dict, spk_times: dict, framerate: float, total_frames: int) -> list:
+    def _all_roi_data(self, roi_analysis: dict, cell_size: dict, spk_times: dict, framerate: float, total_frames: int) -> list:
         """Compile data from roi_analysis into one csv file"""
         num_roi = len(roi_analysis.keys())
         if len(cell_size.keys()) == num_roi and len(spk_times.keys()) == num_roi:
@@ -503,7 +516,7 @@ class AnalyzeNeurons():
 
     def _get_cell_size(self, path: str, col: str) -> dict:
         """Extract cell size from previous analysis."""
-        cell_data = self.read_csv(path)
+        cell_data = self._read_csv(path)
         cell_size = {}
         rois = [roi for roi in cell_data["ROI"]]
         cs = [size for size in cell_data[col]]
@@ -608,3 +621,65 @@ class AnalyzeNeurons():
                 active += 1
         active = (active / len(spk_times)) * 100
         return active
+
+    def compile_files(self, base_folder: str, output_name: str, metrics: list | None, file_name: str = "summary.txt"):
+        """Compile files."""
+        if metrics is None:
+            metrics = ["Total ROI", "Percent Active ROI", "Average Cell Size", "Cell Size Standard Deviation",
+                        "Average Amplitude", "Amplitude Standard Deviation",
+                        "Average Max Slope", "Max Slope Standard Deviation", "Average Time to Rise",
+                        "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
+                        "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
+                        "Frequency", "Global Connectivity"]
+
+        dir_list = []
+
+        for (dir_path, _dir_names, file_names) in os.walk(base_folder):
+            if file_name in file_names:
+                dir_list.append(dir_path)
+
+        files = []
+
+        # traverse through all the matching files
+        for dir_name in dir_list:
+            with open (os.path.join(dir_name, file_name)) as file:
+            # with open(dir_name + "/" + file_name) as file:
+                data = {}
+                data['name'] = dir_name.split(os.path.sep)[-1]
+                lines = file.readlines()
+                # find the variable in the file
+                for line in lines:
+                    for old_var in metrics:
+                        if old_var.lower().strip() in line.lower():
+                            items = line.split(":")
+                            var = items[0].strip()
+
+                            if var not in data:
+                                data[var] = []
+
+                            values = items[1].strip().split(" ")
+                            num = values[0].strip("%")
+
+                            if values[0] == "N/A" or values[0] == "No":
+                                num = 0
+                            data[var] = float(num)
+
+                if len(data) > 1:
+                    files.append(data)
+                else:
+                    print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
+
+        if len(files) > 0:
+            # write into a new csv file
+            field_names = list(data.keys())
+
+            compile_name = base_folder + output_name
+            print(f"compile name: {compile_name}")
+            print(f"base folder: {base_folder}")
+            
+            with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
+                writer = csv.DictWriter(c_file, fieldnames=field_names)
+                writer.writeheader()
+                writer.writerows(files)
+        else:
+            print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501

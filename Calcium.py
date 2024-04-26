@@ -87,6 +87,7 @@ class Calcium(QDialog):
 
         self.seg: SegmentNeurons = None
         self.analysis: AnalyzeNeurons = None
+        self.folder_list: list = []
 
     def _update_fname(self, file: str) -> None:
         '''Update the filename displayed on the selection window.'''
@@ -113,15 +114,18 @@ class Calcium(QDialog):
     def _run(self):
         """Run."""
         self._load_module()
+        today = date.today().strftime("%y%m%d")
+        additional_name = f"_{today}_{self.fname.text()}"
+
         # iterate through the folder, find ome.tif
         for (folder, _, filenames) in os.walk(self.folder_path):
             for file_name in filenames:
                 if file_name.endswith(".ome.tif") and not file_name.startswith("._"):
+                    self._record_folders(folder)
                     recording_name = file_name[:-8]
                     print(f"recording name: {recording_name}")
-                    today = date.today().strftime("%y%m%d")
                     save_path = os.path.join(folder, recording_name)
-                    save_path = save_path + "_" + today + "_" + self.fname.text()
+                    save_path = save_path + additional_name
                     
                     # if segmentation, run segmentation
                     if self.seg and self.seg._check_model():
@@ -135,15 +139,29 @@ class Calcium(QDialog):
                             if len(self.dff) > 0 and len(self.roi_dict) > 0:
                                 mda_file = recording_name + "_metadata.txt"
                                 mda_file = os.path.join(folder, mda_file)
-                                self.analysis._analyze(self.roi_dict, None, self.dff, mda_file, save_path)
+                                self.analysis.analyze(self.roi_dict, None, self.dff, mda_file, save_path)
                             else:
                                 print(f"No cells in {recording_name} to analyze. Check segmentation!")
 
                     # if only analysis, run analysis
                     if not self.seg and self.analysis:
-                        path = os.path.join(folder, recording_name)
-                        self.analysis._reanalyze(path, save_path)
+                        # path = os.path.join(folder, recording_name)
+                        self.analysis.reanalyze(folder, recording_name, save_path)
+
+            if len(self.folder_list) > 0:
+
+                self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
+                del self.folder_list[-1]
+
         print("------------FINISHED-------------")
+        self.analysis: AnalyzeNeurons = None
+        self.flder_list: list = []
+
+    def _record_folders(self, folder: str):
+        """Record folder location for compilation."""
+        if not (folder in self.folder_list):
+            self.folder_list.append(folder)
+
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
     sd = Calcium()
