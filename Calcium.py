@@ -155,7 +155,7 @@ class Calcium(QDialog):
 
         print("------------FINISHED-------------")
         self.analysis: AnalyzeNeurons = None
-        self.flder_list: list = []
+        self.folder_list: list = []
 
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""

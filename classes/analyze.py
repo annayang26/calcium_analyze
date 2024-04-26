@@ -672,10 +672,7 @@ class AnalyzeNeurons():
         if len(files) > 0:
             # write into a new csv file
             field_names = list(data.keys())
-
             compile_name = base_folder + output_name
-            print(f"compile name: {compile_name}")
-            print(f"base folder: {base_folder}")
             
             with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
