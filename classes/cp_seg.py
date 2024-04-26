@@ -149,3 +149,6 @@ class SegmentNeurons():
 
         return roi_dict, dff
 
+    def _run_evk(self):
+        """Run segmentation for evoked activity."""
+        #TODO: to be implemented

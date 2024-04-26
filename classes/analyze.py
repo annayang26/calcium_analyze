@@ -39,7 +39,8 @@ class AnalyzeNeurons():
         return dff_file
 
     def analyze(self, roi_dict: dict | None, cell_size: dict, 
-                 dff: dict | pd.DataFrame, mda_path: str, save_path: str):
+                 dff: dict | pd.DataFrame, mda_path: str, save_path: str,
+                 sum_name: str ='/summary.txt'):
         """Analyze Cells."""
         roi_dff, n_dff, spk = self._analyze_dff(dff) 
         framerate, binning, pixel_size, objective, total_frames, magnification = self._extract_metadata(mda_path)
@@ -51,7 +52,7 @@ class AnalyzeNeurons():
         mean_connect = self._get_mean_connect(roi_dff, spk)
 
         self._save_results(save_path, spk, cell_size, roi_analysis, framerate, total_frames)
-        self._generate_summary(save_path, roi_analysis, spk, '/summary.txt', cell_size,
+        self._generate_summary(save_path, roi_analysis, spk, sum_name, cell_size,
                                 framerate, total_frames, mean_connect)
 
         # plot calcium traces
@@ -86,6 +87,76 @@ class AnalyzeNeurons():
         if not analyzed:
             print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
 
+    def analyze_evk(self, folder_path: str, recording_name: str, save_path: str):
+        """Analyzed evoked activities."""
+        for folders, dirs, fnames in os.walk(folder_path):
+            for dir in dirs:
+                if recording_name in dir:
+                    # analyzed = False 
+                    # traverse through the folder selected, go to one folder
+                    dir_path = os.path.join(folders, dir)
+                    dff_file = os.path.join(dir_path, "dff.csv")
+                    dff_st_path = os.path.join(dir_path, "stimulated")
+                    dff_st_file = os.path.join(dff_st_path, "dff_st.csv")
+                    dff_nst_path = os.path.join(dir_path, "non_stimulated")
+                    dff_nst_file = os.path.join(dff_nst_path, "dff_nst.csv")
+                    mda_path = os.path.join(folder_path, recording_name)
+                    mda_file = mda_path + "_metadata.txt"
+
+                    if os.path.exists(dff_file) and os.path.exists(mda_file) and os.path.exists(dff_st_file) and os.path.exists(dff_nst_file):
+                        # get cell size
+                        path_1 = os.path.join(dir_path, "roi_size.csv")
+                        path_2 = os.path.join(dir_path, "roi_data.csv")
+
+                        if os.path.exists(path_1):
+                            cell_size = self._get_cell_size(path_1, "cell size")
+                        elif os.path.exists(path_2):
+                            cell_size = self._get_cell_size(path_2, "cell_size (um)")
+
+                        # all rois
+                        dff_df = self._read_csv(dff_file)
+                        self.analyze(None, cell_size, dff_df, mda_file, save_path, '/evk_summary.txt')
+
+                        framerate, binning, pixel_size, objective, total_frames, magnification = self._extract_metadata(mda_file)
+                        # stimulated and unstimulated
+                        st_dff_df = self._read_csv(dff_st_file)
+                        st_roi_dff, st_n_dff, st_spk = self._analyze_dff(st_dff_df)
+                        nst_dff_df = self._read_csv(dff_nst_file)
+                        nst_roi_dff, nst_n_dff, nst_spk = self._analyze_dff(nst_dff_df)  
+                        
+                        st_roi_analysis = self._analyze_roi(st_roi_dff, st_spk, framerate)
+                        nst_roi_analysis = self._analyze_roi(nst_roi_dff, nst_spk, framerate)
+                        st_mean_connect = self._get_mean_connect(st_roi_dff, st_spk)
+                        nst_mean_connect = self._get_mean_connect(nst_roi_dff, nst_spk)
+
+                        st_save_path = os.path.join(save_path, "stimulated")
+                        nst_save_path = os.path.join(save_path, "non_stimulated")
+
+                        st_cell_size = self._get_evk_cell_size(cell_size, st_roi_dff)
+                        nst_cell_size = self._get_evk_cell_size(cell_size, nst_roi_dff)
+
+                        self._save_results(st_save_path, st_spk, st_cell_size, st_roi_analysis, framerate, total_frames)
+                        self._save_results(nst_save_path, nst_spk, nst_cell_size, nst_roi_analysis, framerate, total_frames)
+                        self._generate_summary(st_save_path, st_roi_analysis, st_spk, '/st_summary.txt', st_cell_size,
+                                                framerate, total_frames, st_mean_connect)
+                        self._generate_summary(nst_save_path, nst_roi_analysis, nst_spk, '/nst_summary.txt', nst_cell_size,
+                                                framerate, total_frames, nst_mean_connect)
+
+                        # plot calcium traces
+                        self._plot_traces(st_n_dff, st_spk, st_save_path)
+                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path)
+
+                    else:
+                        print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
+
+    def _get_evk_cell_size(self, cell_size: dict, roi_dff: dict) -> dict:
+        """Get cell size for evoked activity."""
+        sub_cell_size = {}
+        for k in roi_dff:
+            sub_cell_size[k] = cell_size[k]
+
+        return sub_cell_size
+
     def _analyze_dff(self, dff_df: pd.DataFrame | dict) -> tuple[dict, dict, dict]:
         """Analyze the dff file and get spikes."""
         if isinstance(dff_df, dict):
@@ -95,7 +166,7 @@ class AnalyzeNeurons():
 
         roi_dff = {}
         spk_times = {}
-        n_dff = {}
+        n_dff = {} # normalized dff
         for col in dff_col:
             dff = list(dff_df[col]) # roi_dff[col] is the dff of one ROI -> LIST
             roi_dff[int(col)]= dff
@@ -646,13 +717,19 @@ class AnalyzeNeurons():
             # with open(dir_name + "/" + file_name) as file:
                 data = {}
                 data['name'] = dir_name.split(os.path.sep)[-1]
+                if data['name'] == 'stimulated':
+                    data['name'] = dir_name.split(os.path.sep)[-2] + '_ST'
+                elif data['name'] == 'non_stimulated':
+                    data['name'] = dir_name.split(os.path.sep)[-2] + '_NST'
                 lines = file.readlines()
+
                 # find the variable in the file
                 for line in lines:
                     for old_var in metrics:
                         if old_var.lower().strip() in line.lower():
                             items = line.split(":")
                             var = items[0].strip()
+                            print(f"++++++++=var is {var}")
 
                             if var not in data:
                                 data[var] = []
@@ -662,6 +739,7 @@ class AnalyzeNeurons():
 
                             if values[0] == "N/A" or values[0] == "No":
                                 num = 0
+                            print(f"the mystery G is {num}")
                             data[var] = float(num)
 
                 if len(data) > 1:

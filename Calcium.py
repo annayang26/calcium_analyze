@@ -31,6 +31,8 @@ class Calcium(QDialog):
 
         self._check_seg = QCheckBox(text="Segment")
         self._check_ana = QCheckBox(text="Analyze")
+        self._evk_seg = QCheckBox(text="Segment(evk)")
+        self._evk_ana = QCheckBox(text="Analyze(evk)")
 
         # self.combobox = QComboBox()
         # self.combobox.addItem("mean")
@@ -73,6 +75,8 @@ class Calcium(QDialog):
 
         self.layout.addWidget(self._check_seg, 2, 0)
         self.layout.addWidget(self._check_ana, 2, 1)
+        self.layout.addWidget(self._evk_seg, 3, 0)
+        self.layout.addWidget(self._evk_ana, 3, 1)
         # self.layout.addWidget(thres, 2, 0)
         # self.layout.addWidget(self.combobox, 2, 1)
         # self.layout.addWidget(frame, 3, 0)
@@ -104,11 +108,11 @@ class Calcium(QDialog):
 
     def _load_module(self):
         """Load Segmentation or Analyze."""
-        if self._check_seg.isChecked():
+        if self._check_seg.isChecked() or self._evk_seg.isChecked():
             self.seg = SegmentNeurons()
             self.seg._load_model()
 
-        if self._check_ana.isChecked():
+        if self._check_ana.isChecked() or self._evk_ana.isChecked():
             self.analysis = AnalyzeNeurons()
 
     def _run(self):
@@ -134,9 +138,15 @@ class Calcium(QDialog):
 
                         self.roi_dict, self.dff = self.seg._run(img, save_path)
 
+                        if self._evk_seg.isChecked():
+                            self.seg._run_evk() ### TODO: to be implemented
+
                         # if also checked for analysis
                         if self.analysis:
-                            if len(self.dff) > 0 and len(self.roi_dict) > 0:
+                            if self._evk_ana.isChecked():
+                                self.analysis.analyze_evk()
+
+                            elif len(self.dff) > 0 and len(self.roi_dict) > 0:
                                 mda_file = recording_name + "_metadata.txt"
                                 mda_file = os.path.join(folder, mda_file)
                                 self.analysis.analyze(self.roi_dict, None, self.dff, mda_file, save_path)
@@ -145,12 +155,20 @@ class Calcium(QDialog):
 
                     # if only analysis, run analysis
                     if not self.seg and self.analysis:
-                        # path = os.path.join(folder, recording_name)
-                        self.analysis.reanalyze(folder, recording_name, save_path)
+                        if self._check_ana.isChecked():
+                            # path = os.path.join(folder, recording_name)
+                            self.analysis.reanalyze(folder, recording_name, save_path)
+                        else:
+                            self.analysis.analyze_evk(folder, recording_name, save_path)
 
             if len(self.folder_list) > 0:
+                if self._evk_ana:
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None, "evk_summary.txt")
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_ST_compiled.csv", None, "st_summary.txt")
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_NST_compiled.csv", None, "nst_summary.txt")
+                else:
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
 
-                self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
                 del self.folder_list[-1]
 
         print("------------FINISHED-------------")
