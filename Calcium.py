@@ -11,6 +11,8 @@ import pickle
 import csv
 from classes.cp_seg import SegmentNeurons
 from classes.analyze import AnalyzeNeurons
+from classes.plotData import PlotData
+
 import tifffile as tff
 
 from PyQt6.QtWidgets import (QApplication, QLabel, QDialog,
