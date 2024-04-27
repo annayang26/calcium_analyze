@@ -164,8 +164,8 @@ class Calcium(QDialog):
             if len(self.folder_list) > 0:
                 if self._evk_ana:
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None, "evk_summary.txt")
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_ST_compiled.csv", None, "st_summary.txt")
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_NST_compiled.csv", None, "nst_summary.txt")
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_st.csv", None, "st_summary.txt")
+                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_nst.csv", None, "nst_summary.txt")
                 else:
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
 
