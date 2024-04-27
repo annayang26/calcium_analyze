@@ -729,7 +729,6 @@ class AnalyzeNeurons():
                         if old_var.lower().strip() in line.lower():
                             items = line.split(":")
                             var = items[0].strip()
-                            print(f"++++++++=var is {var}")
 
                             if var not in data:
                                 data[var] = []
@@ -739,7 +738,6 @@ class AnalyzeNeurons():
 
                             if values[0] == "N/A" or values[0] == "No":
                                 num = 0
-                            print(f"the mystery G is {num}")
                             data[var] = float(num)
 
                 if len(data) > 1:

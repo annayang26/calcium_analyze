@@ -64,6 +64,9 @@ class Calcium(QDialog):
         filename = QLabel("Enter filename/date: ")
         self.fname = QLineEdit()
 
+        self._plot_btn = QPushButton("Plot")
+        self._plot_btn.clicked.connect(self._plot_data)
+
         self.ok_btn = QPushButton("Run")
         self.ok_btn.clicked.connect(self._run)
 
@@ -84,6 +87,7 @@ class Calcium(QDialog):
         # self.layout.addWidget(frame, 3, 0)
         # self.layout.addWidget(self.ptg_line, 3, 1)
         # self.layout.addLayout(threshold, 4, 0)
+        self.layout.addWidget(self._plot_btn, 4, 0)
         self.layout.addWidget(filename, 5, 0)
         self.layout.addWidget(self.fname, 5, 1)
         self.layout.addWidget(self.ok_btn, 6, 0)
@@ -93,6 +97,7 @@ class Calcium(QDialog):
 
         self.seg: SegmentNeurons = None
         self.analysis: AnalyzeNeurons = None
+        self.plot_data: PlotData = PlotData()
         self.folder_list: list = []
 
     def _update_fname(self, file: str) -> None:
@@ -181,6 +186,10 @@ class Calcium(QDialog):
         """Record folder location for compilation."""
         if not (folder in self.folder_list):
             self.folder_list.append(folder)
+
+    def _plot_data(self):
+        """Plot data."""
+        self.plot_data._find_csv(self.folder_path)
 
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
