@@ -56,7 +56,8 @@ class AnalyzeNeurons():
                                 framerate, total_frames, mean_connect)
 
         # plot calcium traces
-        self._plot_traces(n_dff, spk, save_path)
+        self._plot_traces(n_dff, spk, save_path, "normalized")
+        self._plot_traces(roi_dff, spk, save_path, "not_normalized")
 
     def reanalyze(self, folder_path: str, recording_name: str, save_path: str):
         """Renalyze the data."""
@@ -89,6 +90,7 @@ class AnalyzeNeurons():
 
     def analyze_evk(self, folder_path: str, recording_name: str, save_path: str):
         """Analyzed evoked activities."""
+        analyzed = False
         for folders, dirs, fnames in os.walk(folder_path):
             for dir in dirs:
                 if recording_name in dir:
@@ -103,7 +105,8 @@ class AnalyzeNeurons():
                     mda_path = os.path.join(folder_path, recording_name)
                     mda_file = mda_path + "_metadata.txt"
 
-                    if os.path.exists(dff_file) and os.path.exists(mda_file) and os.path.exists(dff_st_file) and os.path.exists(dff_nst_file):
+                    if os.path.exists(dff_file) and os.path.exists(mda_file) and\
+                    os.path.exists(dff_st_file) and os.path.exists(dff_nst_file):
                         # get cell size
                         path_1 = os.path.join(dir_path, "roi_size.csv")
                         path_2 = os.path.join(dir_path, "roi_data.csv")
@@ -143,11 +146,15 @@ class AnalyzeNeurons():
                                                 framerate, total_frames, nst_mean_connect)
 
                         # plot calcium traces
-                        self._plot_traces(st_n_dff, st_spk, st_save_path)
-                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path)
+                        self._plot_traces(st_n_dff, st_spk, st_save_path, "normalized")
+                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path, "normalized")
+                        self._plot_traces(st_roi_dff, st_spk, st_save_path, "not_normalized")
+                        self._plot_traces(nst_roi_dff, nst_spk, nst_save_path, "not_normalized")
 
-                    else:
-                        print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
+                        analyzed = True
+
+        if not analyzed:
+            print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
 
     def _get_evk_cell_size(self, cell_size: dict, roi_dff: dict) -> dict:
         """Get cell size for evoked activity."""
@@ -476,14 +483,14 @@ class AnalyzeNeurons():
 
         return phase_diff
 
-    def _plot_traces(self, roi_dff: dict, spk_times: dict, save_path: str) -> None:
+    def _plot_traces(self, roi_dff: dict, spk_times: dict, save_path: str, normalized: str) -> None:
         """Plot  traces."""
         dff_to_plot, color_list = self._random_pick(roi_dff, 10)
-        self._plot_traces_no_peaks(roi_dff, dff_to_plot, color_list, save_path)
-        self._plot_traces_w_peaks(roi_dff, dff_to_plot, spk_times, color_list, save_path)
+        self._plot_traces_no_peaks(roi_dff, dff_to_plot, color_list, save_path, normalized)
+        self._plot_traces_w_peaks(roi_dff, dff_to_plot, spk_times, color_list, save_path, normalized)
 
     def _plot_traces_no_peaks(self, roi_dff: dict, dff_to_plot: list,
-                              color_list: list, path: str) -> None:
+                              color_list: list, path: str, normalized: str) -> None:
         """Plot the traces."""
         fig, ax = plt.subplots(figsize=(20, 20))
         if len(dff_to_plot) > 0:
@@ -498,12 +505,12 @@ class AnalyzeNeurons():
                 ax.plot(roi_dff[d] + height_index * (1.2 * height_increment), color=color_list[height_index],
                         linewidth=3)
             ax.set_yticks(y_pos, labels=dff_to_plot)
-            fname = "traces_no_detection.png"
+            fname = normalized + "_traces_no_detection.png"
             plt.savefig(os.path.join(path, fname))
             plt.close()
 
     def _plot_traces_w_peaks(self, roi_dff: dict, dff_to_plot: list, spk_times: dict, 
-                             color_list: list, path: str):
+                             color_list: list, path: str, normalized: str):
         """Plot traces with peak detected."""
         fig, ax = plt.subplots(figsize=(20, 20))
         if len(dff_to_plot) > 0:
@@ -523,7 +530,7 @@ class AnalyzeNeurons():
                     ax.legend()
 
             ax.set_yticks(y_pos, labels=dff_to_plot)
-            fname = "traces_w_peaks.png"
+            fname = normalized + "_traces_w_peaks.png"
             plt.savefig(os.path.join(path, fname))
             plt.close()
 
@@ -639,6 +646,7 @@ class AnalyzeNeurons():
                 std_IEI = np.std(np.array(total_IEI))
             else:
                 avg_IEI = 'N/A - Only one event per ROI'
+
         else:
             avg_amplitude = 'No calcium events detected'
             avg_max_slope = 'No calcium events detected'
@@ -658,7 +666,6 @@ class AnalyzeNeurons():
             sum_file.write(f'Total ROI: {len(cell_size.keys())}\n')
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
 
-            # NOTE: include cell size in the summary text file
             sum_file.write(f'Average Cell Size(um): {avg_cs}\n')
             sum_file.write(f'\tCell Size Standard Deviation: {std_cs}\n')
 
@@ -679,7 +686,7 @@ class AnalyzeNeurons():
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 if framerate:
-                    frequency = avg_num_events/(total_frames/framerate)
+                    frequency = (avg_num_events)/(total_frames/framerate)
                     sum_file.write(f'Average Frequency (num_events/s): {frequency}\n')
 
             sum_file.write(f'Global Connectivity: {mean_connect}')
@@ -750,7 +757,7 @@ class AnalyzeNeurons():
             field_names = list(data.keys())
             compile_name = base_folder + output_name
             
-            with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
+            with open(compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)

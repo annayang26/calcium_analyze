@@ -2,23 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import os 
-import csv
 
 class PlotData():
     def __init__(self) -> None:
         pass
-
-    def start_plotting(self, folder_path: str):
-        """Start plotting."""
-        # 1. find all compiled csv files for the same batch/condition/date
-
-        # 1.a compile them into one giant csv file, with the original name saved in each csv file
-
-        # 1.b save the giant csv file
-
-        # 2. plot 
         
-    def _find_csv(self, folder_path: str):
+    def just_plot(self, folder_path: str):
         # compiled_csv_list = []
         # find all the compiled.csv in the given folder
         for folders, dirs, fnames in os.walk(folder_path):
@@ -61,6 +50,26 @@ class PlotData():
                         if col == "name" or "Standard Deviation" in col:
                             continue
                         self._plot(genotypes, groups, df, col, save_path, "NST")
+
+    def ana_plot(self, csv_path: str, evk: str | None):
+        """Plot after analysis."""
+        df = self._read_csv(csv_path)
+
+        if evk == "ST":
+            save_path = csv_path[:-len("_compiled_st.csv")] + "ST"
+        elif evk == "NST":
+            save_path = csv_path[:-len("_compiled_nst.csv")] + "NST"
+        else:
+            save_path = csv_path[:-len("_compiled.csv")]
+
+        rec_name = df.loc[:, 'name']
+        genotypes, groups, _ = self._group_data(rec_name)
+
+        cols = df.columns
+        for col in cols:
+            if col == "name" or "Standard Deviation" in col:
+                continue
+            self._plot(genotypes, groups, df, col, save_path, None)
 
     def _read_csv(self, path: str) -> pd.DataFrame:
         """Read the csv file."""

@@ -163,18 +163,21 @@ class Calcium(QDialog):
                     # if only analysis, run analysis
                     if not self.seg and self.analysis:
                         if self._check_ana.isChecked():
-                            # path = os.path.join(folder, recording_name)
                             self.analysis.reanalyze(folder, recording_name, save_path)
                         else:
                             self.analysis.analyze_evk(folder, recording_name, save_path)
 
             if len(self.folder_list) > 0:
-                if self._evk_ana:
+                if self._evk_ana.isChecked():
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None, "evk_summary.txt")
+                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_st.csv", None, "st_summary.txt")
+                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled_st.csv", "ST")
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_nst.csv", None, "nst_summary.txt")
+                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled_nst.csv", "NST")
                 else:
                     self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
+                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
 
                 del self.folder_list[-1]
 
@@ -184,12 +187,18 @@ class Calcium(QDialog):
 
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""
-        if not (folder in self.folder_list):
+        if folder not in self.folder_list:
             self.folder_list.append(folder)
 
-    def _plot_data(self):
+    def _plot_data(self, ):
         """Plot data."""
-        self.plot_data._find_csv(self.folder_path)
+        self.plot_data.just_plot(self.folder_path)
+
+    def _compile_plot(self, base_folder: str, csv_name: str, evk: str | None):
+        """To plot after compile."""
+        compile_name = base_folder + csv_name
+        csv_path = os.path.join(base_folder, compile_name)
+        self.plot_data.ana_plot(csv_path, evk)
 
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
