@@ -77,9 +77,9 @@ class AnalyzeNeurons():
                         path_2 = os.path.join(dir_path, "roi_data.csv")
 
                         if os.path.exists(path_1):
-                            cell_size = self._get_cell_size(path_1, "cell size")
+                            cell_size, new_cell_size = self._get_cell_size(path_1, "cell size")
                         elif os.path.exists(path_2):
-                            cell_size = self._get_cell_size(path_2, "cell_size (um)")
+                            cell_size, new_cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
                         dff_df = self._read_csv(dff_file)
                         self.analyze(None, cell_size, dff_df, mda_file, save_path)
@@ -112,9 +112,9 @@ class AnalyzeNeurons():
                         path_2 = os.path.join(dir_path, "roi_data.csv")
 
                         if os.path.exists(path_1):
-                            cell_size = self._get_cell_size(path_1, "cell size")
+                            cell_size, new_cell_size = self._get_cell_size(path_1, "cell size")
                         elif os.path.exists(path_2):
-                            cell_size = self._get_cell_size(path_2, "cell_size (um)")
+                            cell_size, new_cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
                         # all rois
                         dff_df = self._read_csv(dff_file)
@@ -146,10 +146,10 @@ class AnalyzeNeurons():
                                                 framerate, total_frames, nst_mean_connect)
 
                         # plot calcium traces
-                        self._plot_traces(st_n_dff, st_spk, st_save_path, "normalized")
-                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path, "normalized")
-                        self._plot_traces(st_roi_dff, st_spk, st_save_path, "not_normalized")
-                        self._plot_traces(nst_roi_dff, nst_spk, nst_save_path, "not_normalized")
+                        self._plot_traces(st_n_dff, st_spk, st_save_path, "norm")
+                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path, "norm")
+                        self._plot_traces(st_roi_dff, st_spk, st_save_path, "not_norm")
+                        self._plot_traces(nst_roi_dff, nst_spk, nst_save_path, "not_norma")
 
                         analyzed = True
 
@@ -602,8 +602,29 @@ class AnalyzeNeurons():
         if len(rois) == len(cs):
             for i, roi in enumerate(rois):
                 cell_size[roi] = cs[i]
+        
+        new_cell_size = self._exclude_small_cells(cell_size, 0.3)
 
-        return cell_size
+        return cell_size, new_cell_size
+
+    def _exclude_small_cells(self, size_dict: dict, pcg: float):
+        """Exclude ROIs that are too small"""
+        size_cutoff = sum(size_dict.values())/len(size_dict) * pcg
+        # print(f"-----------size cut off: {size_cutoff}")
+
+        roi_to_delete = []
+        size_copy = size_dict.copy()
+        for roi, size in size_copy.items():
+            # print(f"=============roi: {roi}, size: {size}")
+            if size < size_cutoff:
+                roi_to_delete.append(roi)
+        # print(f"==========roi to delete: {roi_to_delete}")
+
+        for roi in roi_to_delete:
+            del size_copy[roi]
+        # print(f'After deletion, len of roi is {len(size_copy)}')
+
+        return size_copy
 
     def _generate_summary(self, save_path:str, roi_analysis: dict,
                          spike_times: dict, file_name: str,
@@ -700,7 +721,8 @@ class AnalyzeNeurons():
         active = (active / len(spk_times)) * 100
         return active
 
-    def compile_files(self, base_folder: str, output_name: str, metrics: list | None, file_name: str = "summary.txt"):
+    def compile_files(self, base_folder: str, output_name: str, metrics: list | None, 
+                      group_name: str, file_name: str = "summary.txt"):
         """Compile files."""
         if metrics is None:
             metrics = ["Total ROI", "Percent Active ROI", "Average Cell Size", "Cell Size Standard Deviation",
@@ -710,56 +732,65 @@ class AnalyzeNeurons():
                         "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
                         "Frequency", "Global Connectivity"]
 
-        dir_list = []
+        dir_list = {}
 
-        for (dir_path, _dir_names, file_names) in os.walk(base_folder):
+        for (dir_path, dir_names, file_names) in os.walk(base_folder):
             if file_name in file_names:
-                dir_list.append(dir_path)
-
-        files = []
+                if group_name in dir_path:
+                    if not dir_list.get(group_name):
+                        dir_list[group_name] = []
+                    dir_list[group_name].append(dir_path)
+                else:
+                    if not dir_list.get(''):
+                        dir_list[''] = [] 
+                    dir_list[''].append(dir_path)
 
         # traverse through all the matching files
-        for dir_name in dir_list:
-            with open (os.path.join(dir_name, file_name)) as file:
-            # with open(dir_name + "/" + file_name) as file:
-                data = {}
-                data['name'] = dir_name.split(os.path.sep)[-1]
-                if data['name'] == 'stimulated':
-                    data['name'] = dir_name.split(os.path.sep)[-2] + '_ST'
-                elif data['name'] == 'non_stimulated':
-                    data['name'] = dir_name.split(os.path.sep)[-2] + '_NST'
-                lines = file.readlines()
+        for group, dir_names in dir_list.items():
+            files = []
+            for dir_name in dir_names:
+                with open (os.path.join(dir_name, file_name)) as file:
+                # with open(dir_name + "/" + file_name) as file:
+                    data = {}
+                    data['name'] = dir_name.split(os.path.sep)[-1]
+                    if data['name'] == 'stimulated':
+                        data['name'] = dir_name.split(os.path.sep)[-2] + '_ST'
+                    elif data['name'] == 'non_stimulated':
+                        data['name'] = dir_name.split(os.path.sep)[-2] + '_NST'
+                    lines = file.readlines()
 
-                # find the variable in the file
-                for line in lines:
-                    for old_var in metrics:
-                        if old_var.lower().strip() in line.lower():
-                            items = line.split(":")
-                            var = items[0].strip()
+                    # find the variable in the file
+                    for line in lines:
+                        for old_var in metrics:
+                            if old_var.lower().strip() in line.lower():
+                                items = line.split(":")
+                                var = items[0].strip()
 
-                            if var not in data:
-                                data[var] = []
+                                if var not in data:
+                                    data[var] = []
 
-                            values = items[1].strip().split(" ")
-                            num = values[0].strip("%")
+                                values = items[1].strip().split(" ")
+                                num = values[0].strip("%")
 
-                            if values[0] == "N/A" or values[0] == "No":
-                                num = 0
-                            data[var] = float(num)
+                                if values[0] == "N/A" or values[0] == "No":
+                                    num = 0
+                                data[var] = float(num)
 
-                if len(data) > 1:
-                    files.append(data)
-                else:
-                    print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
+                    if len(data) > 1:
+                        files.append(data)
+                    else:
+                        print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
 
-        if len(files) > 0:
-            # write into a new csv file
-            field_names = list(data.keys())
-            compile_name = base_folder + output_name
-            
-            with open(compile_name, 'w', newline='') as c_file:
-                writer = csv.DictWriter(c_file, fieldnames=field_names)
-                writer.writeheader()
-                writer.writerows(files)
-        else:
-            print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
+            if len(files) > 0:
+                # write into a new csv file
+                field_names = list(data.keys())
+                compile_name = base_folder + group + output_name
+                
+                with open(compile_name, 'w', newline='') as c_file:
+                    writer = csv.DictWriter(c_file, fieldnames=field_names)
+                    writer.writeheader()
+                    writer.writerows(files)
+            else:
+                print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
+
+        return dir_list.keys()

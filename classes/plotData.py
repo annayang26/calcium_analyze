@@ -51,7 +51,7 @@ class PlotData():
                             continue
                         self._plot(genotypes, groups, df, col, save_path, "NST")
 
-    def ana_plot(self, csv_path: str, evk: str | None):
+    def ana_plot(self, csv_path: str, evk: str | None, recording_group: str):
         """Plot after analysis."""
         df = self._read_csv(csv_path)
 
@@ -64,12 +64,13 @@ class PlotData():
 
         rec_name = df.loc[:, 'name']
         genotypes, groups, _ = self._group_data(rec_name)
+        # print(f"================Groups are {groups}")
 
         cols = df.columns
         for col in cols:
             if col == "name" or "Standard Deviation" in col:
                 continue
-            self._plot(genotypes, groups, df, col, save_path, None)
+            self._plot(genotypes, groups, df, col, save_path, None, recording_group)
 
     def _read_csv(self, path: str) -> pd.DataFrame:
         """Read the csv file."""
@@ -95,16 +96,21 @@ class PlotData():
                 genotypes[genotype] = []
             genotypes[genotype].append(genotype)
 
-            diff_ele = [ele for ele in elements if ele not in first_name and len(ele)>1 and not ele.startswith("Pos")]
+            diff_ele = [ele for ele in elements if ele not in first_name and\
+                         len(ele)>1 and not ele.startswith("Pos")]
             if len(diff_ele) == 0:
                 if not groups.get(elements[first_group]):
                     groups[elements[first_group]] = []
+                    diff.append(elements[first_group])
                 groups[elements[first_group]].append(i)
             elif len(diff_ele) == 1:
+                if (ele for ele in diff) in diff_ele:
+                    continue
                 if not groups.get(diff_ele[0]):
                     groups[diff_ele[0]] = []
+                    diff.append(diff_ele)
                 groups[diff_ele[0]].append(i)
-                diff.append(diff_ele)
+                
         
         return genotypes, groups, diff
 
@@ -129,7 +135,7 @@ class PlotData():
         return group_data
 
     def _plot(self, genotypes: dict, groups: dict, all_data: pd.DataFrame, 
-              metric: str, path: str, evk: str | None):
+              metric: str, path: str, evk: str | None, recording_group: str):
         """Plot the metric """
         fig, ax = plt.subplots()
         start_x = 1
@@ -141,7 +147,7 @@ class PlotData():
                 x_range = np.ones(len(data)) * start_x
                 ax.scatter(x_range, data, label=group)
 
-                title = f"{geno}_{metric}"
+                title = f"{geno}_{metric}_{recording_group}"
                 if evk:
                     title += f"_{evk}"
                 ax.set_title(title)
@@ -157,6 +163,6 @@ class PlotData():
         if not os.path.isdir(folder_path):
             os.mkdir(folder_path)
 
-        save_path = os.path.join(folder_path, f"{metric}.png")
+        save_path = os.path.join(folder_path, f"{recording_group}_{metric}.png")
         plt.savefig(save_path)
         plt.close()

@@ -62,7 +62,7 @@ class Calcium(QDialog):
         # threshold.addWidget(self.to_line)
 
         filename = QLabel("Enter filename/date: ")
-        self.fname = QLineEdit()
+        self.fname = QLineEdit('TEST')
 
         self._plot_btn = QPushButton("Plot")
         self._plot_btn.clicked.connect(self._plot_data)
@@ -169,15 +169,15 @@ class Calcium(QDialog):
 
             if len(self.folder_list) > 0:
                 if self._evk_ana.isChecked():
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None, "evk_summary.txt")
-                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_st.csv", None, "st_summary.txt")
-                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled_st.csv", "ST")
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled_nst.csv", None, "nst_summary.txt")
-                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled_nst.csv", "NST")
+                    groups = self.analysis.compile_files(self.folder_list[-1], "_compiled.csv", None, additional_name, "evk_summary.txt")
+                    self._compile_plot(self.folder_list[-1], "_compiled.csv", None, groups)
+                    groups = self.analysis.compile_files(self.folder_list[-1], "_compiled_st.csv", None, additional_name, "st_summary.txt")
+                    self._compile_plot(self.folder_list[-1], "_compiled_st.csv", "_ST", groups)
+                    groups = self.analysis.compile_files(self.folder_list[-1], "_compiled_nst.csv", None, additional_name, "nst_summary.txt")
+                    self._compile_plot(self.folder_list[-1], "_compiled_nst.csv", "_NST", groups)
                 else:
-                    self.analysis.compile_files(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
-                    self._compile_plot(self.folder_list[-1], f"{additional_name}_compiled.csv", None)
+                    groups = self.analysis.compile_files(self.folder_list[-1], "_compiled.csv", None, additional_name)
+                    self._compile_plot(self.folder_list[-1], "_compiled.csv", None, groups)
 
                 del self.folder_list[-1]
 
@@ -194,11 +194,12 @@ class Calcium(QDialog):
         """Plot data."""
         self.plot_data.just_plot(self.folder_path)
 
-    def _compile_plot(self, base_folder: str, csv_name: str, evk: str | None):
+    def _compile_plot(self, base_folder: str, csv_name: str, evk: str | None, groups: list[str]):
         """To plot after compile."""
-        compile_name = base_folder + csv_name
-        csv_path = os.path.join(base_folder, compile_name)
-        self.plot_data.ana_plot(csv_path, evk)
+        for group in groups:
+            compile_name = base_folder + group + csv_name
+            csv_path = os.path.join(base_folder, compile_name)
+            self.plot_data.ana_plot(csv_path, evk, group)
 
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
