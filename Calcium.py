@@ -64,6 +64,9 @@ class Calcium(QDialog):
         filename = QLabel("Enter filename/date: ")
         self.fname = QLineEdit('TEST')
 
+        group_name = QLabel("Enter group names for plot (separate by comma):")
+        self.group_name = QLineEdit('optional')
+
         self._plot_btn = QPushButton("Plot")
         self._plot_btn.clicked.connect(self._plot_data)
 
@@ -87,11 +90,13 @@ class Calcium(QDialog):
         # self.layout.addWidget(frame, 3, 0)
         # self.layout.addWidget(self.ptg_line, 3, 1)
         # self.layout.addLayout(threshold, 4, 0)
-        self.layout.addWidget(self._plot_btn, 4, 0)
         self.layout.addWidget(filename, 5, 0)
         self.layout.addWidget(self.fname, 5, 1)
         self.layout.addWidget(self.ok_btn, 6, 0)
         self.layout.addWidget(self.cancel_btn, 6, 1)
+        self.layout.addWidget(group_name, 7, 0)
+        self.layout.addWidget(self.group_name, 7, 1)
+        self.layout.addWidget(self._plot_btn, 8, 0)
 
         self.setLayout(self.layout)
 
@@ -183,6 +188,7 @@ class Calcium(QDialog):
 
         print("------------FINISHED-------------")
         self.analysis: AnalyzeNeurons = None
+        self.seg = None
         self.folder_list: list = []
 
     def _record_folders(self, folder: str):
@@ -190,8 +196,13 @@ class Calcium(QDialog):
         if folder not in self.folder_list:
             self.folder_list.append(folder)
 
-    def _plot_data(self, ):
+    def _plot_data(self):
         """Plot data."""
+        # if self.group_name == "opional":
+        #     self.group_name = ""
+        
+        # groups = self.group_name.text().split(",")
+        print("Plotting")
         self.plot_data.just_plot(self.folder_path)
 
     def _compile_plot(self, base_folder: str, csv_name: str, evk: str | None, groups: list[str]):
@@ -200,6 +211,12 @@ class Calcium(QDialog):
             compile_name = base_folder + group + csv_name
             csv_path = os.path.join(base_folder, compile_name)
             self.plot_data.ana_plot(csv_path, evk, group)
+
+class InputGroup(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Input group name: ")
+
 
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)

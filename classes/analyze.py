@@ -179,7 +179,7 @@ class AnalyzeNeurons():
             roi_dff[int(col)]= dff
             nn_dff = (dff - np.min(dff)) / (np.max(dff) - np.min(dff))
             n_dff[int(col)] = nn_dff
-            spikes = self._mean_spk(roi_dff[int(col)], 90, 0.25)
+            spikes = self._peak_detection(roi_dff[int(col)], 90, 0.25)
             spk_times[int(col)] = list(spikes)
 
         return roi_dff, n_dff, spk_times
@@ -195,11 +195,15 @@ class AnalyzeNeurons():
 
         return cs_dict, cs_arr
 
-    def _mean_spk(self, roi_dff_list: list, frame_window_ptg: int, prom_pctg: float) -> dict[dict]:
+    def _peak_detection(self, roi_dff_list: list, frame_window_ptg: int, prom_pctg: float) -> dict[dict]:
         """Test threshold for the scipy find peaks for one ROI."""
         start_frame = len(roi_dff_list) - int(len(roi_dff_list)*(frame_window_ptg/100))
         # using different percentage of the median
         prominence = np.mean(roi_dff_list[start_frame:]) * prom_pctg
+
+        # test distance between peaks = 1s
+        # distance = 1 * framerate 
+        # distance = 10
         peaks, _ = signal.find_peaks(roi_dff_list, prominence=prominence)
         spk_time_ptg = list(peaks)
 

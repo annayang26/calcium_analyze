@@ -23,7 +23,7 @@ class PlotData():
                     for col in cols:
                         if col == "name" or "Standard Deviation" in col:
                             continue
-                        self._plot(genotypes, groups, df, col, save_path, None)
+                        self._plot(genotypes, groups, df, col, save_path, None, "")
 
                 elif fname.endswith("_compiled_st.csv") and "._" not in fname:
                     file_path = os.path.join(folders, fname)
@@ -36,7 +36,7 @@ class PlotData():
                     for col in cols:
                         if col == "name" or "Standard Deviation" in col:
                             continue
-                        self._plot(genotypes, groups, df, col, save_path, "ST")
+                        self._plot(genotypes, groups, df, col, save_path, "ST", "")
 
                 elif fname.endswith("_compiled_nst.csv") and "._" not in fname:
                     file_path = os.path.join(folders, fname)
@@ -49,7 +49,7 @@ class PlotData():
                     for col in cols:
                         if col == "name" or "Standard Deviation" in col:
                             continue
-                        self._plot(genotypes, groups, df, col, save_path, "NST")
+                        self._plot(genotypes, groups, df, col, save_path, "NST", "")
 
     def ana_plot(self, csv_path: str, evk: str | None, recording_group: str):
         """Plot after analysis."""
