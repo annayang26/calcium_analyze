@@ -82,9 +82,11 @@ class AnalyzeNeurons():
                         elif os.path.exists(path_2):
                             cell_size, new_cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
-                        raw_signal_dict = self._read_csv(raw_signal_file, start_frame=150).to_dict('list')
+                        start_frame = 150
+                        raw_signal_dict = self._read_csv(raw_signal_file, start_frame=start_frame).to_dict('list')
+                        print(f"           starting from {start_frame} of the original recording")
                         self.analyze(None, cell_size, raw_signal_dict, mda_file, save_path, method="mean", 
-                                     frame_window_ptg=1, prom_pctg=0.25, start_frame=150)
+                                     frame_window_ptg=1, prom_pctg=0.25, start_frame=start_frame)
                         analyzed = True
 
         if not analyzed:
@@ -699,7 +701,8 @@ class AnalyzeNeurons():
 
             sum_file.write(f'Global Connectivity: {mean_connect}')
             sum_file.write('\n')
-            sum_file.write(f'exclude the first {start_frame} from the original recording')
+            sum_file.write('\n')
+            sum_file.write(f'exclude the first {start_frame} frames from the original recording\n')
             sum_file.write(f'calculating the peak detection using: {prom_pctg*100}% the {method} of {frame_window_ptg*100}% of the frames')
 
     def _analyze_active(self, spk_times: dict):
