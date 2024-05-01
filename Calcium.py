@@ -217,7 +217,6 @@ class InputGroup(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Input group name: ")
 
-
 if __name__ == "__main__":
     sd_app = QApplication(sys.argv)
     sd = Calcium()

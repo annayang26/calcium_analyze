@@ -1,25 +1,16 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import os
 from scipy import signal, stats
 import numpy as np 
-import random
 import pickle
 import csv
 
-light_colors = ["whitesmoke", "white", "snow", "mistyrose", "seashell", "linen",
-                "antiquewhite", "oldlace", "floralwhite", "cornsilk", "lemonchiffon",
-                "ivory", "beige", "lightyellow", "lightgoldenrodyellow",
-                "yellow", "honeydew", "mintcream", "azure", "lightcyan", "aliceblue",
-                "ghostwhite", "lavender", "lavenderblush"]
-all_colors = list(mcolors.CSS4_COLORS)
-COLOR_LIST = [color for color in all_colors if color not in light_colors]
+from .plotData import PlotData
 
 class AnalyzeNeurons():
     """Analyze segmented calcium recordings."""
     def __init__(self):
-        pass
+        self.plot_data: PlotData = PlotData()
 
     def _find_file(self, folder_path: str, target: str) -> list[str]:
         """Find all dff csv files in the given folder."""
@@ -32,18 +23,27 @@ class AnalyzeNeurons():
 
         return file_list
 
-    def _read_csv(self, path: str) -> pd.DataFrame:
+    # discard the first 150 rows(frames)
+    def _read_csv(self, path: str, start_frame: int) -> pd.DataFrame:
         """Read the csv file."""
         with open(path, "r") as file:
-            dff_file = pd.read_csv(file)
-        return dff_file
+            all_row_csv_file = pd.read_csv(file)
+            # print(all_row_csv_file.head(10))
+            # print(f"rows of the raw signal all frames is {all_row_csv_file.shape}")
+            csv_file = all_row_csv_file.iloc[start_frame:, :]
+            # print(f"rows of the raw signal is {csv_file.shape[0]}")
+        return csv_file
 
     def analyze(self, roi_dict: dict | None, cell_size: dict, 
-                 dff: dict | pd.DataFrame, mda_path: str, save_path: str,
-                 sum_name: str ='/summary.txt'):
+                 raw_signal: dict, mda_path: str, save_path: str, method: str,
+                 frame_window_ptg: int, prom_pctg: float,
+                 sum_name: str ='/summary.txt', start_frame: int = 0):
         """Analyze Cells."""
-        roi_dff, n_dff, spk = self._analyze_dff(dff) 
+        dff, _, _ = self.calculateDFF(raw_signal)
+        roi_dff, n_dff, spk = self._analyze_dff(dff, method, frame_window_ptg, prom_pctg)
         framerate, binning, pixel_size, objective, total_frames, magnification = self._extract_metadata(mda_path)
+
+        total_frames = total_frames - start_frame
 
         if not cell_size:
             cell_size, cs_arr = self._cell_size(roi_dict, binning, pixel_size, objective, magnification)
@@ -51,13 +51,14 @@ class AnalyzeNeurons():
         roi_analysis = self._analyze_roi(roi_dff, spk, framerate)
         mean_connect = self._get_mean_connect(roi_dff, spk)
 
-        self._save_results(save_path, spk, cell_size, roi_analysis, framerate, total_frames)
-        self._generate_summary(save_path, roi_analysis, spk, sum_name, cell_size,
-                                framerate, total_frames, mean_connect)
+        self._save_results(save_path, spk, cell_size, roi_analysis, framerate, total_frames, roi_dff)
+        self._generate_summary(save_path, roi_analysis, spk, sum_name, cell_size, framerate, 
+                               total_frames, mean_connect, frame_window_ptg, prom_pctg, method,
+                               start_frame)
 
         # plot calcium traces
-        self._plot_traces(n_dff, spk, save_path, "normalized")
-        self._plot_traces(roi_dff, spk, save_path, "not_normalized")
+        self.plot_data._plot_traces(n_dff, spk, save_path, "normalized")
+        self.plot_data._plot_traces(roi_dff, spk, save_path, "not_normalized")
 
     def reanalyze(self, folder_path: str, recording_name: str, save_path: str):
         """Renalyze the data."""
@@ -67,11 +68,11 @@ class AnalyzeNeurons():
                 if recording_name in dir:
                     # traverse through the folder selected, go to one folder
                     dir_path = os.path.join(folders, dir)
-                    dff_file = os.path.join(dir_path, "dff.csv")
+                    raw_signal_file = os.path.join(dir_path, "raw_signal.csv") # 5/1: re-calculate dff from raw signal
                     mda_path = os.path.join(folder_path, recording_name)
                     mda_file = mda_path + "_metadata.txt"
 
-                    if os.path.exists(dff_file) and os.path.exists(mda_file):
+                    if os.path.exists(raw_signal_file) and os.path.exists(mda_file):
                         # get cell size
                         path_1 = os.path.join(dir_path, "roi_size.csv")
                         path_2 = os.path.join(dir_path, "roi_data.csv")
@@ -81,13 +82,15 @@ class AnalyzeNeurons():
                         elif os.path.exists(path_2):
                             cell_size, new_cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
-                        dff_df = self._read_csv(dff_file)
-                        self.analyze(None, cell_size, dff_df, mda_file, save_path)
+                        raw_signal_dict = self._read_csv(raw_signal_file, start_frame=150).to_dict('list')
+                        self.analyze(None, cell_size, raw_signal_dict, mda_file, save_path, method="mean", 
+                                     frame_window_ptg=1, prom_pctg=0.25, start_frame=150)
                         analyzed = True
 
         if not analyzed:
             print(f"one of the required files (dff.csv or metadata.txt) not found for {recording_name}. Please run segmentation with the analysis.")
 
+    # 5/1 TODO: need to make sure this is working after spontaneous recording
     def analyze_evk(self, folder_path: str, recording_name: str, save_path: str):
         """Analyzed evoked activities."""
         analyzed = False
@@ -146,10 +149,10 @@ class AnalyzeNeurons():
                                                 framerate, total_frames, nst_mean_connect)
 
                         # plot calcium traces
-                        self._plot_traces(st_n_dff, st_spk, st_save_path, "norm")
-                        self._plot_traces(nst_n_dff, nst_spk, nst_save_path, "norm")
-                        self._plot_traces(st_roi_dff, st_spk, st_save_path, "not_norm")
-                        self._plot_traces(nst_roi_dff, nst_spk, nst_save_path, "not_norma")
+                        self.plot_data._plot_traces(st_n_dff, st_spk, st_save_path, "norm")
+                        self.plot_data._plot_traces(nst_n_dff, nst_spk, nst_save_path, "norm")
+                        self.plot_data._plot_traces(st_roi_dff, st_spk, st_save_path, "not_norm")
+                        self.plot_data._plot_traces(nst_roi_dff, nst_spk, nst_save_path, "not_norma")
 
                         analyzed = True
 
@@ -164,7 +167,39 @@ class AnalyzeNeurons():
 
         return sub_cell_size
 
-    def _analyze_dff(self, dff_df: pd.DataFrame | dict) -> tuple[dict, dict, dict]:
+    def calculateDFF(self, roi_signal: dict) -> tuple[dict, dict, dict]:
+        """Calculate ∆F/F."""
+        dff = {}
+        median = {}
+        bg = {}
+
+        for n in roi_signal:
+            background, median[n] = self.calculate_background(roi_signal[n], 200)
+            bg[n] = background.tolist()
+            dff[n] = (roi_signal[n] - background) / background
+            dff[n] = dff[n] - np.min(dff[n])
+        return dff, median, bg
+
+    def calculate_background(self, f: list, window: int) -> tuple[np.ndarray, np.ndarray]:
+        """Calculate background using the mean of the siganl below the 
+        median of the signals in the window
+        """
+        background = np.zeros_like(f)
+        background[0] = f[0]
+        median = [background[0]]
+        for y in range(1, len(f)):
+            x = y - window
+            if x < 0:
+                x = 0
+
+            lower_quantile = f[x:y] <= np.median(f[x:y])
+            signal_in_frame = np.array(f[x:y])
+            background[y] = np.mean(signal_in_frame[lower_quantile])
+            median.append(np.median(f[x:y]))
+        return background, median
+
+    def _analyze_dff(self, dff_df: pd.DataFrame | dict, method: str, 
+                     frame_window_ptg: int, prom_pctg: float) -> tuple[dict, dict, dict]:
         """Analyze the dff file and get spikes."""
         if isinstance(dff_df, dict):
             dff_col = dff_df.keys()
@@ -179,7 +214,7 @@ class AnalyzeNeurons():
             roi_dff[int(col)]= dff
             nn_dff = (dff - np.min(dff)) / (np.max(dff) - np.min(dff))
             n_dff[int(col)] = nn_dff
-            spikes = self._peak_detection(roi_dff[int(col)], 90, 0.25)
+            spikes = self._peak_detection(roi_dff[int(col)], method, frame_window_ptg, prom_pctg)
             spk_times[int(col)] = list(spikes)
 
         return roi_dff, n_dff, spk_times
@@ -195,11 +230,14 @@ class AnalyzeNeurons():
 
         return cs_dict, cs_arr
 
-    def _peak_detection(self, roi_dff_list: list, frame_window_ptg: int, prom_pctg: float) -> dict[dict]:
+    def _peak_detection(self, roi_dff_list: list, method: str, frame_window_ptg: float, prom_pctg: float) -> dict[dict]:
         """Test threshold for the scipy find peaks for one ROI."""
-        start_frame = len(roi_dff_list) - int(len(roi_dff_list)*(frame_window_ptg/100))
-        # using different percentage of the median
-        prominence = np.mean(roi_dff_list[start_frame:]) * prom_pctg
+        start_frame = len(roi_dff_list) - int(len(roi_dff_list)*(frame_window_ptg))
+        # using different percentage of the mean
+        if method == "mean":
+            prominence = np.mean(roi_dff_list[start_frame:]) * prom_pctg
+        elif method == "median":
+            prominence = np.median(roi_dff_list[start_frame:]) * prom_pctg
 
         # test distance between peaks = 1s
         # distance = 1 * framerate 
@@ -487,68 +525,8 @@ class AnalyzeNeurons():
 
         return phase_diff
 
-    def _plot_traces(self, roi_dff: dict, spk_times: dict, save_path: str, normalized: str) -> None:
-        """Plot  traces."""
-        dff_to_plot, color_list = self._random_pick(roi_dff, 10)
-        self._plot_traces_no_peaks(roi_dff, dff_to_plot, color_list, save_path, normalized)
-        self._plot_traces_w_peaks(roi_dff, dff_to_plot, spk_times, color_list, save_path, normalized)
-
-    def _plot_traces_no_peaks(self, roi_dff: dict, dff_to_plot: list,
-                              color_list: list, path: str, normalized: str) -> None:
-        """Plot the traces."""
-        fig, ax = plt.subplots(figsize=(20, 20))
-        if len(dff_to_plot) > 0:
-            dff_max = np.zeros(len(dff_to_plot))
-            for max_index, dff_index in enumerate(dff_to_plot):
-                dff_max[max_index] = np.max(roi_dff[dff_index])
-            height_increment = max(dff_max)
-
-            y_pos = []
-            for height_index, d in enumerate(dff_to_plot):
-                y_pos.append(height_index * (1.2 * height_increment))
-                ax.plot(roi_dff[d] + height_index * (1.2 * height_increment), color=color_list[height_index],
-                        linewidth=3)
-            ax.set_yticks(y_pos, labels=dff_to_plot)
-            fname = normalized + "_traces_no_detection.png"
-            plt.savefig(os.path.join(path, fname))
-            plt.close()
-
-    def _plot_traces_w_peaks(self, roi_dff: dict, dff_to_plot: list, spk_times: dict, 
-                             color_list: list, path: str, normalized: str):
-        """Plot traces with peak detected."""
-        fig, ax = plt.subplots(figsize=(20, 20))
-        if len(dff_to_plot) > 0:
-            dff_max = np.zeros(len(dff_to_plot))
-            for max_index, dff_index in enumerate(dff_to_plot):
-                dff_max[max_index] = np.max(roi_dff[dff_index])
-            height_increment = max(dff_max)
-
-            y_pos = []
-            for height_index, d in enumerate(dff_to_plot):
-                y_pos.append(height_index * (1.2 * height_increment))
-                ax.plot(roi_dff[d] + height_index * (1.2 * height_increment), color=color_list[height_index], linewidth=3)
-                if len(spk_times[d]) > 0:
-                    y = [roi_dff[d][i] for i in spk_times[d]]
-                    ax.plot(spk_times[d], y + height_index * (1.2 * height_increment),
-                                   ms=6, color='r', marker='o', ls='', label=f"{d}: {len(spk_times[d])}")
-                    ax.legend()
-
-            ax.set_yticks(y_pos, labels=dff_to_plot)
-            fname = normalized + "_traces_w_peaks.png"
-            plt.savefig(os.path.join(path, fname))
-            plt.close()
-
-    def _random_pick(self, roi_dff: dict, num: int) -> tuple[list, list]:
-        """Pick 10 traces randomly to plot."""
-        num_f = np.min([num, len(roi_dff)])
-        final_dff = random.sample(list(roi_dff.keys()), num_f)
-        final_dff.sort()
-        rand_color_ind = random.sample(COLOR_LIST, k=num_f,)
-
-        return final_dff, rand_color_ind
-    
     def _save_results(self, save_path: str, spk: dict, cell_size: dict, roi_analysis: dict,
-                      framerate: float, total_frames: int):
+                      framerate: float, total_frames: int, dff: dict):
         """Save the analysis results."""
         # save spike times
         if not os.path.isdir(save_path):
@@ -556,6 +534,10 @@ class AnalyzeNeurons():
 
         with open(save_path + '/spike_times.pkl', 'wb') as spike_file:
             pickle.dump(spk, spike_file)
+        
+        dff_df = pd.DataFrame.from_dict(dff)
+        path = save_path + '/del_frames_dff.csv'
+        dff_df.to_csv(path, index=False)
 
         # save 
         roi_data = self._all_roi_data(roi_analysis, cell_size, spk, framerate, total_frames)
@@ -598,7 +580,7 @@ class AnalyzeNeurons():
 
     def _get_cell_size(self, path: str, col: str) -> dict:
         """Extract cell size from previous analysis."""
-        cell_data = self._read_csv(path)
+        cell_data = self._read_csv(path, start_frame=0)
         cell_size = {}
         rois = [roi for roi in cell_data["ROI"]]
         cs = [size for size in cell_data[col]]
@@ -633,7 +615,8 @@ class AnalyzeNeurons():
     def _generate_summary(self, save_path:str, roi_analysis: dict,
                          spike_times: dict, file_name: str,
                          cell_size: dict, framerate: float, total_frames: int, 
-                         mean_connect: dict) -> None:
+                         mean_connect: dict, frame_window_ptg: float, prom_pctg: float, method: str,
+                         start_frame: int) -> None:
         """Generate summary."""
         avg_cs = float(np.mean(list(cell_size.values())))
         std_cs = float(np.std(list(cell_size.values())))
@@ -715,6 +698,9 @@ class AnalyzeNeurons():
                     sum_file.write(f'Average Frequency (num_events/s): {frequency}\n')
 
             sum_file.write(f'Global Connectivity: {mean_connect}')
+            sum_file.write('\n')
+            sum_file.write(f'exclude the first {start_frame} from the original recording')
+            sum_file.write(f'calculating the peak detection using: {prom_pctg*100}% the {method} of {frame_window_ptg*100}% of the frames')
 
     def _analyze_active(self, spk_times: dict):
         """Calculate the percentage of active cell bodies"""

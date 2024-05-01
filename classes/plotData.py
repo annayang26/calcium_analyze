@@ -1,7 +1,17 @@
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
-import os 
+import os
+import random
+
+light_colors = ["whitesmoke", "white", "snow", "mistyrose", "seashell", "linen",
+                "antiquewhite", "oldlace", "floralwhite", "cornsilk", "lemonchiffon",
+                "ivory", "beige", "lightyellow", "lightgoldenrodyellow",
+                "yellow", "honeydew", "mintcream", "azure", "lightcyan", "aliceblue",
+                "ghostwhite", "lavender", "lavenderblush"]
+all_colors = list(mcolors.CSS4_COLORS)
+COLOR_LIST = [color for color in all_colors if color not in light_colors]
 
 class PlotData():
     def __init__(self) -> None:
@@ -166,3 +176,64 @@ class PlotData():
         save_path = os.path.join(folder_path, f"{recording_group}_{metric}.png")
         plt.savefig(save_path)
         plt.close()
+
+    def _plot_traces(self, roi_dff: dict, spk_times: dict, save_path: str, normalized: str) -> None:
+        """Plot  traces."""
+        dff_to_plot, color_list = self._random_pick(roi_dff, 10)
+        self._plot_traces_no_peaks(roi_dff, dff_to_plot, color_list, save_path, normalized)
+        self._plot_traces_w_peaks(roi_dff, dff_to_plot, spk_times, color_list, save_path, normalized)
+
+    def _plot_traces_no_peaks(self, roi_dff: dict, dff_to_plot: list,
+                              color_list: list, path: str, normalized: str) -> None:
+        """Plot the traces."""
+        fig, ax = plt.subplots(figsize=(20, 20))
+        if len(dff_to_plot) > 0:
+            dff_max = np.zeros(len(dff_to_plot))
+            for max_index, dff_index in enumerate(dff_to_plot):
+                dff_max[max_index] = np.max(roi_dff[dff_index])
+            height_increment = max(dff_max)
+
+            y_pos = []
+            for height_index, d in enumerate(dff_to_plot):
+                y_pos.append(height_index * (1.2 * height_increment))
+                ax.plot(roi_dff[d] + height_index * (1.2 * height_increment), color=color_list[height_index],
+                        linewidth=3)
+            ax.set_yticks(y_pos, labels=dff_to_plot)
+            fname = normalized + "_traces_no_detection.png"
+            plt.savefig(os.path.join(path, fname))
+            plt.close()
+
+    def _plot_traces_w_peaks(self, roi_dff: dict, dff_to_plot: list, spk_times: dict, 
+                             color_list: list, path: str, normalized: str):
+        """Plot traces with peak detected."""
+        fig, ax = plt.subplots(figsize=(20, 20))
+        if len(dff_to_plot) > 0:
+            dff_max = np.zeros(len(dff_to_plot))
+            for max_index, dff_index in enumerate(dff_to_plot):
+                dff_max[max_index] = np.max(roi_dff[dff_index])
+            height_increment = max(dff_max)
+
+            y_pos = []
+            for height_index, d in enumerate(dff_to_plot):
+                y_pos.append(height_index * (1.2 * height_increment))
+                ax.plot(roi_dff[d] + height_index * (1.2 * height_increment), color=color_list[height_index], linewidth=3)
+                if len(spk_times[d]) > 0:
+                    y = [roi_dff[d][i] for i in spk_times[d]]
+                    ax.plot(spk_times[d], y + height_index * (1.2 * height_increment),
+                                   ms=6, color='r', marker='o', ls='', label=f"{d}: {len(spk_times[d])}")
+                    ax.legend()
+
+            ax.set_yticks(y_pos, labels=dff_to_plot)
+            fname = normalized + "_traces_w_peaks.png"
+            plt.savefig(os.path.join(path, fname))
+            plt.close()
+
+    def _random_pick(self, roi_dff: dict, num: int) -> tuple[list, list]:
+        """Pick 10 traces randomly to plot."""
+        num_f = np.min([num, len(roi_dff)])
+        final_dff = random.sample(list(roi_dff.keys()), num_f)
+        final_dff.sort()
+        rand_color_ind = random.sample(COLOR_LIST, k=num_f,)
+
+        return final_dff, rand_color_ind
+    
