@@ -82,7 +82,7 @@ class AnalyzeNeurons():
                         elif os.path.exists(path_2):
                             cell_size, new_cell_size = self._get_cell_size(path_2, "cell_size (um)")
 
-                        start_frame = 150
+                        start_frame = 0
                         raw_signal_dict = self._read_csv(raw_signal_file, start_frame=start_frame).to_dict('list')
                         print(f"           starting from {start_frame} of the original recording")
                         self.analyze(None, cell_size, raw_signal_dict, mda_file, save_path, method="mean", 

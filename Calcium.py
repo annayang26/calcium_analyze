@@ -148,7 +148,7 @@ class Calcium(QDialog):
                         file_path = os.path.join(folder, file_name)             
                         img = tff.imread(file_path, is_mmstack=False)
 
-                        self.roi_dict, self.dff = self.seg._run(img, save_path)
+                        self.roi_dict, self.raw_f = self.seg._run(img, save_path)
 
                         if self._evk_seg.isChecked():
                             self.seg._run_evk() ### TODO: to be implemented
@@ -158,10 +158,11 @@ class Calcium(QDialog):
                             if self._evk_ana.isChecked():
                                 self.analysis.analyze_evk()
 
-                            elif len(self.dff) > 0 and len(self.roi_dict) > 0:
+                            elif len(self.raw_f) > 0 and len(self.roi_dict) > 0:
                                 mda_file = recording_name + "_metadata.txt"
                                 mda_file = os.path.join(folder, mda_file)
-                                self.analysis.analyze(self.roi_dict, None, self.dff, mda_file, save_path)
+                                self.analysis.analyze(self.roi_dict, None, self.raw_f, mda_file, save_path,
+                                                      method="mean", frame_window_ptg=1, prom_pctg=0.25)
                             else:
                                 print(f"No cells in {recording_name} to analyze. Check segmentation!")
 

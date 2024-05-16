@@ -145,9 +145,9 @@ class SegmentNeurons():
         masks = self._segment(img[frame], file_path)
         roi_dict, masks = self._getROIpos(masks, 0)
         roi_f = self._ROI_intensity(roi_dict, img)
-        dff, median, bg = self._calculate_DFF(roi_f)
+        # dff, median, bg = self._calculate_DFF(roi_f)
 
-        return roi_dict, dff
+        return roi_dict, roi_f
 
     def _run_evk(self):
         """Run segmentation for evoked activity."""
